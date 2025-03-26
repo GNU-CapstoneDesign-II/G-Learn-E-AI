@@ -1,1 +1,30 @@
+# ===================
+# Python 관련
+# ===================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+
+# 가상환경
+venv/
+.venv/
+
+# 환경변수 파일
 .env
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+
+# ===================
+# PyCharm 설정 관련
+# ===================
+.idea/
+*.iml
+
+# ===================
+# OS/편집기 기본 파일
+# ===================
+.DS_Store
+Thumbs.db
