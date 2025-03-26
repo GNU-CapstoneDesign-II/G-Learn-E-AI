@@ -133,11 +133,13 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
     request_token_sum = 0
     response_token_sum = 0
 
-    request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_system_template))
-    request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_user_template.format(user_input=content)))
-
-    content = summary_prompt(content)
-    response_token_sum += len(tokenizer.encode(content))
+    print(f"content token length: {len(tokenizer.encode(content))}")
+    if len(tokenizer.encode(content)) > 5000:
+        # 요청 토큰 길이가 5000을 초과하면 내용을 요약합니다.
+        request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_system_template))
+        request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_user_template.format(user_input=content)))
+        content = summary_prompt(content)
+        response_token_sum += len(tokenizer.encode(content))
 
 
     system_template = GPTRequestDTO.system_template_kr.format(
