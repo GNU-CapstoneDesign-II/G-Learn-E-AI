@@ -3,6 +3,17 @@ from pydantic import BaseModel
 from typing import List
 
 
+# DTO
+class PromptRequest(BaseModel):
+    prompt: str
+
+
+class MakeProblemRequest(BaseModel):
+    content: str
+    difficulty: str
+    question_types: dict
+
+
 class GradeItem(BaseModel):
     id: int
     question: str

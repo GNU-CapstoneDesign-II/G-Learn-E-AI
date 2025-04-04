@@ -1,25 +1,21 @@
 # app/main.py
+from dotenv import load_dotenv
 from fastapi import FastAPI
-from pydantic import BaseModel
-from starlette.exceptions import HTTPException
 from starlette.responses import HTMLResponse
 
-from service.gpt_service import ask_gpt, make_problem, grade_items, grade_blank_items
-from dto.CommonDTO import GradeItem, GradeResult, GradeRequestDTO, BlankItem, BlankResult, BlankRequestDTO
-from typing import List
+from repository.database import engine
+from repository.models import Base
+from controller.database_controller import router as db_router
+from controller.problem_maker_controller import router as maker_router
 
+load_dotenv()
 app = FastAPI()
 
+# DB 테이블 생성
+Base.metadata.create_all(bind=engine)
 
-# DTO
-class PromptRequest(BaseModel):
-    prompt: str
-
-
-class MakeProblemRequest(BaseModel):
-    content: str
-    difficulty: str
-    question_types: dict
+app.include_router(db_router)
+app.include_router(maker_router)
 
 
 example_body = {
@@ -47,50 +43,6 @@ example_body = {
 }
 
 
-@app.post("/ask")
-def ask_endpoint(req: PromptRequest):
-    result = ask_gpt(req.prompt)
-    return {"answer": result}
-
-
-@app.post("/make-problem")
-def make_problems(req: MakeProblemRequest):
-    result = make_problem(req.content, req.difficulty, req.question_types)
-    return {"result": result}
-
-
-@app.post("/grade")
-async def grade_endpoint(request_dto: GradeRequestDTO):
-    """
-    여러 문제에 대한 채점을 처리하는 엔드포인트.
-    요청으로부터 items를 받아 GPT API를 통해 채점 후 점수와 문제 ID를 반환.
-    """
-    try:
-        results = grade_items(request_dto.items)
-        return {"result": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/grade/blank")
-async def grade_blank_endpoint(request_dto: BlankRequestDTO):
-    """
-    여러 빈칸 채우기 문제에 대한 채점을 처리하는 엔드포인트.
-    요청으로부터 items를 받아 GPT API를 통해 채점 후, 각 문제의 ID와 맞았는지 여부를 반환합니다.
-    반환 형식:
-    {
-        "result": [
-            {"id": 1, "correct": true},
-            {"id": 2, "correct": false},
-            ...
-        ]
-    }
-    """
-    try:
-        results = grade_blank_items(request_dto.items, 50)
-        return {"result": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # 간단한 웹 페이지를 제공하는 GET 엔드포인트

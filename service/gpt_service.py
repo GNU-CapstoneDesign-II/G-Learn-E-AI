@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from dto.GptRequestDTO import GPTRequestDTO
 from dto.CommonDTO import GradeItem, GradeResult, BlankItem, BlankResult
-from typing import List
+from typing import List, Dict, Any
 
 load_dotenv()  # .env 파일 불러오기
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -70,8 +70,8 @@ def build_followup_prompt(existing_questions: list[str], missing_counts: dict, d
         existing_question_list="\n".join(existing_questions)
     )
 
-    print(f"system_prompt: {system_prompt}")
-    print(f"user_prompt: {user_prompt}")
+    # print(f"system_prompt: {system_prompt}")
+    # print(f"user_prompt: {user_prompt}")
 
     return [
         {"role": "system", "content": system_prompt},
@@ -119,7 +119,7 @@ def trim_all_question_types(data: dict, question_types: dict) -> dict:
     return trimmed
 
 
-def make_problem(content: str, difficulty: str, question_types: dict) -> dict | str:
+def make_problem(content: str, difficulty: str, question_types: dict) -> dict:
     # question_types 내부 구조를 미리 변수로 꺼냄
     mc = question_types["multiple_choice"]
     ox = question_types["ox"]
@@ -141,7 +141,6 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
     request_token_sum = 0
     response_token_sum = 0
 
-    print(f"content token length: {len(tokenizer.encode(content))}")
     if len(tokenizer.encode(content)) > 5000:
         # 요청 토큰 길이가 5000을 초과하면 내용을 요약합니다.
         request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_system_template))
@@ -169,7 +168,7 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
     print(f"system_template: {system_template}")
     print(f"prompt: {prompt}")
 
-    print(f"Request Token length: {len(tokenizer.encode(prompt + system_template))}")
+    # print(f"Request Token length: {len(tokenizer.encode(prompt + system_template))}")
     request_token_sum += len(tokenizer.encode(prompt + system_template))
 
     if len(tokenizer.encode(prompt + system_template)) > 10000:
@@ -180,9 +179,7 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
                       expected_token_count["fill_in_the_blank"] * fib["num_questions"] + \
                       expected_token_count["descriptive"] * desc["num_questions"] + \
                       expected_token_count["base"]
-    print(f"Expected Token length: {expected_tokens}")
-    if expected_tokens > 5000:
-        return "Expected token length exceeds 5000"
+    # print(f"Expected Token length: {expected_tokens}")
 
     response = client.chat.completions.create(
         model=gpt_model,
@@ -200,8 +197,9 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
     ).choices[0].message.content.strip()
 
     response_token_sum += len(tokenizer.encode(response))
+
     response = fix_json_commas(response)
-    print(f"Response: {response}")
+    # print(f"Response: {response}")
 
     # 정규표현식을 사용해 ```json ... ``` 형태의 코드 블록을 제거합니다.
     match = re.search(r"```json\s*(\{.*\})\s*```", response, re.DOTALL)
@@ -250,11 +248,85 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
             except json.JSONDecodeError as e:
                 return "Follow-up Json parsing error: " + str(e)
             parsed = trim_all_question_types(parsed, question_types)
-    print(f"Request Token Sum: {request_token_sum},"
-          f" cost: {request_token_sum / 1000.0 * gpt_request_cost * exchange_rate:.6f}원 ({request_token_sum / 1000.0 * gpt_request_cost:.6f}$)")
-    print(f"Response Token Sum: {response_token_sum},"
-          f" cost: {response_token_sum / 1000.0 * gpt_response_cost * exchange_rate:.6f}원 ({response_token_sum / 1000.0 * gpt_response_cost:.6f}$)")
-    return parsed
+    # print(f"Request Token Sum: {request_token_sum},"
+    #       f" cost: {request_token_sum / 1000.0 * gpt_request_cost * exchange_rate:.6f}원 ({request_token_sum / 1000.0 * gpt_request_cost:.6f}$)")
+    # print(f"Response Token Sum: {response_token_sum},"
+    #       f" cost: {response_token_sum / 1000.0 * gpt_response_cost * exchange_rate:.6f}원 ({response_token_sum / 1000.0 * gpt_response_cost:.6f}$)")
+    return {
+        "result": parsed,
+        "request_tokens": request_token_sum,
+        "response_tokens": response_token_sum,
+    }
+
+
+
+def gpt_role_eval(
+        role_name: str,
+        role_desc: str,
+        user_prompt: str,
+        tokenizer,
+        request_token_sum: int,
+        response_token_sum: int
+) -> tuple[list[dict], int, int]:
+    """
+    단일 역할에 대해 GPT API를 호출하고, 결과(JSON)를 반환.
+    호출에 사용된 토큰 수(request_token_sum, response_token_sum)를 갱신해 반환한다.
+    """
+    # 시스템 프롬프트 생성
+    system_prompt = GPTRequestDTO.grade_system_template.format(name=role_name, role=role_desc)
+
+    # GPT 요청
+    response = client.chat.completions.create(
+        model=gpt_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0.0,
+    ).choices[0].message.content.strip()
+
+    # 토큰 계산
+    request_token_sum += len(tokenizer.encode(system_prompt))
+    request_token_sum += len(tokenizer.encode(user_prompt))
+    response_token_sum += len(tokenizer.encode(response))
+
+    print(f"[{role_name}] Response:", response)
+
+    # JSON 파싱
+    answer_text = fix_json_commas(response)
+    confidences = json.loads(answer_text)
+    return confidences, request_token_sum, response_token_sum
+
+
+def run_role_evaluations(
+        prompt: str,
+        roles: list[dict],
+        tokenizer,
+        request_token_sum: int,
+        response_token_sum: int
+) -> tuple[list[list[dict]], int, int]:
+    """
+    여러 역할에 대해 GPT 호출을 반복 실행.
+    각 호출 결과(리스트 형태 JSON)를 묶어서 반환.
+    """
+    role_confidences = []
+    for role in roles:
+        try:
+            result, request_token_sum, response_token_sum = gpt_role_eval(
+                role_name=role["name"],
+                role_desc=role["description"],
+                user_prompt=prompt,
+                tokenizer=tokenizer,
+                request_token_sum=request_token_sum,
+                response_token_sum=response_token_sum
+            )
+            role_confidences.append(result)
+        except Exception as e:
+            print(f"[{role['name']}] Error:", e)
+            raise Exception(f"{role['name']} 평가 중 오류 발생: " + str(e))
+    return role_confidences, request_token_sum, response_token_sum
+
+
 
 
 def create_grade_prompt(items: List[GradeItem]) -> str:
@@ -275,16 +347,12 @@ def create_grade_prompt(items: List[GradeItem]) -> str:
     return GPTRequestDTO.grade_user_template.format(items=all_items_text)
 
 
-def grade_items(items: List[GradeItem]) -> List[GradeResult]:
+def grade_items(items: List[GradeItem]) -> dict[str, Any]:
     """
-    GPT API를 호출하여 각 GradeItem에 대해 여러 역할로 평가를 수행합니다.
-    각 역할은 답안의 맞고 틀림에 대한 확신 정도(confidence)를 0~100 사이의 정수로 반환합니다.
-    최종 결과는 각 문제에 대해 각 역할의 confidence 평균을 산출하고, 평균이 50 이상이면 맞음(true), 그렇지 않으면 틀림(false)으로 결정합니다.
-    반환되는 결과는 각 문제의 ID와 최종 판정(correct)을 포함하는 GradeResult 리스트입니다.
+    서술형 답안을 여러 역할로 평가 후, 평균 확신도가 50 이상이면 정답(true)으로 판정.
     """
     prompt = create_grade_prompt(items)
 
-    # 평가 역할 목록과 각 역할의 평가 기준 설명
     roles = [
         {
             "name": "전반적 평가자",
@@ -300,36 +368,15 @@ def grade_items(items: List[GradeItem]) -> List[GradeResult]:
         }
     ]
 
-    role_confidences = []  # 각 역할별로 반환된 평가 결과 (JSON 배열)를 저장
-    request_token_sum = 0  # 전체 GPT 호출에서 사용된 토큰 수를 누적
-    response_token_sum = 0  # 전체 GPT 호출에서 반환된 토큰 수를 누적
-    for role in roles:
-        # 역할 정보를 시스템 프롬프트에 포함시키고, 각 역할이 confidence 값을 반환하도록 추가 설명합니다.
-        system_prompt = GPTRequestDTO.grade_system_template.format(name=role["name"], role=role["description"])
+    request_token_sum = 0
+    response_token_sum = 0
 
-        try:
-            response = client.chat.completions.create(
-                model=gpt_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.0,
-            ).choices[0].message.content.strip()
+    # 중복 제거: run_role_evaluations 사용
+    role_confidences, request_token_sum, response_token_sum = run_role_evaluations(
+        prompt, roles, tokenizer, request_token_sum, response_token_sum
+    )
 
-            request_token_sum += len(tokenizer.encode(system_prompt))
-            request_token_sum += len(tokenizer.encode(prompt))
-            response_token_sum += len(tokenizer.encode(response))
-
-            print(f"[{role['name']}] Response:", response)
-            answer_text = fix_json_commas(response)
-            confidences = json.loads(answer_text)
-            role_confidences.append(confidences)
-        except Exception as e:
-            print(f"[{role['name']}] Error:", e)
-            raise Exception(f"{role['name']} 평가 중 오류 발생: " + str(e))
-
-    # 역할별 결과를 문제 ID 기준으로 집계: {id: [confidence값, ...]}
+    # 결과 집계
     combined_confidences = {}
     for confidences in role_confidences:
         for item in confidences:
@@ -339,19 +386,17 @@ def grade_items(items: List[GradeItem]) -> List[GradeResult]:
                 raise Exception(f"잘못된 평가 결과 형식: {item}")
             combined_confidences.setdefault(id_val, []).append(conf_val)
 
-    # 각 문제별 평균 confidence를 산출하고, 평균이 50 이상이면 정답(true)으로 판정
     final_results = []
     for id_val, conf_list in combined_confidences.items():
         avg_conf = sum(conf_list) / len(conf_list)
-        final_decision = avg_conf >= 50  # 임계값 50
+        final_decision = avg_conf >= 50
         final_results.append(GradeResult(id=id_val, correct=final_decision))
 
-    print(f"Request Token Sum: {request_token_sum},"
-          f" cost: {request_token_sum / 1000.0 * gpt_request_cost * exchange_rate:.6f}원 ({request_token_sum / 1000.0 * gpt_request_cost:.6f}$)")
-    print(f"Response Token Sum: {response_token_sum},"
-          f" cost: {response_token_sum / 1000.0 * gpt_response_cost * exchange_rate:.6f}원 ({response_token_sum / 1000.0 * gpt_response_cost:.6f}$)")
-
-    return final_results
+    return {
+        "result": final_results,
+        "request_tokens": request_token_sum,
+        "response_tokens": response_token_sum
+    }
 
 
 def create_blank_prompt(items: List[BlankItem]) -> str:
@@ -375,17 +420,12 @@ def create_blank_prompt(items: List[BlankItem]) -> str:
     return GPTRequestDTO.blank_user_template.format(items=all_items_text)
 
 
-def grade_blank_items(items: List[BlankItem], confidence_threshold: int) -> List[BlankResult]:
+def grade_blank_items(items: List[BlankItem], confidence_threshold: int = 50) -> dict[str, Any]:
     """
-    GPT API를 호출하여 각 BlankItem에 대해 여러 역할(예: 전반적 평가자, 핵심 단어 평가자, 논리성 평가자)로 채점을 수행합니다.
-    각 역할은 학생의 빈칸 채우기 문제 답안이 정답(리스트)과 일치하는지 여부를 true/false로 평가합니다.
-    최종 결과는 각 문제에 대해 역할별 평가를 집계하여 다수결(majority vote)로 최종 판정을 내며,
-    각 문제의 ID와 최종 판정(correct)을 포함하는 BlankResult 리스트를 반환합니다.
+    빈칸 채우기 문제를 여러 역할로 평가 후, 평균이 threshold 이상이면 정답(true).
     """
     prompt = create_blank_prompt(items)
-    print(f"Prompt: {prompt}")
 
-    # 평가 역할 목록 및 각 역할의 평가 기준 설명
     roles = [
         {
             "name": "전반적 평가자",
@@ -397,43 +437,19 @@ def grade_blank_items(items: List[BlankItem], confidence_threshold: int) -> List
         },
         {
             "name": "논리성 평가자",
-            "description": "학생의 답안이 문제의 의도와 논리적으로 부합하는지 평가하십시오."
+            "description": "학생의 답안이 문제의 의도와 논리적으로 부합하는지 평가하십시오"
         }
     ]
 
-    role_confidences = []  # 각 역할별로 반환된 평가 결과 (JSON 배열)를 저장
-    request_token_sum = 0  # 전체 GPT 호출에서 사용된 토큰 수를 누적
-    response_token_sum = 0  # 전체 GPT 호출에서 반환된 토큰 수를 누적
+    request_token_sum = 0
+    response_token_sum = 0
 
+    # 마찬가지로 중복 제거
+    role_confidences, request_token_sum, response_token_sum = run_role_evaluations(
+        prompt, roles, tokenizer, request_token_sum, response_token_sum
+    )
 
-    for role in roles:
-        system_prompt = GPTRequestDTO.blank_system_template.format(
-            name=role["name"],
-            role=role["description"]
-        )
-        try:
-            response = client.chat.completions.create(
-                model=gpt_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.0,
-            ).choices[0].message.content.strip()
-
-            request_token_sum += len(tokenizer.encode(system_prompt))
-            request_token_sum += len(tokenizer.encode(prompt))
-            response_token_sum += len(tokenizer.encode(response))
-
-            print(f"[{role['name']}] Response:", response)
-            answer_text = fix_json_commas(response)
-            confidences = json.loads(answer_text)
-            role_confidences.append(confidences)
-        except Exception as e:
-            print(f"[{role['name']}] Error:", e)
-            raise Exception(f"{role['name']} 평가 중 오류 발생: " + str(e))
-
-    # 역할별 결과를 문제 ID 기준으로 집계: {id: [confidence값, ...]}
+    # 결과 집계
     combined_confidences = {}
     for confidences in role_confidences:
         for item in confidences:
@@ -443,15 +459,14 @@ def grade_blank_items(items: List[BlankItem], confidence_threshold: int) -> List
                 raise Exception(f"잘못된 평가 결과 형식: {item}")
             combined_confidences.setdefault(id_val, []).append(conf_val)
 
-    # 각 문제별 평균 confidence를 산출하고, 평균이 50 이상이면 정답(true)으로 판정
     final_results = []
     for id_val, conf_list in combined_confidences.items():
         avg_conf = sum(conf_list) / len(conf_list)
-        final_decision = avg_conf >= confidence_threshold  # 임계값 50
+        final_decision = avg_conf >= confidence_threshold
         final_results.append(BlankResult(id=id_val, correct=final_decision))
 
-    print(f"Request Token Sum: {request_token_sum},"
-          f" cost: {request_token_sum / 1000.0 * gpt_request_cost * exchange_rate:.6f}원 ({request_token_sum / 1000.0 * gpt_request_cost:.6f}$)")
-    print(f"Response Token Sum: {response_token_sum},"
-          f" cost: {response_token_sum / 1000.0 * gpt_response_cost * exchange_rate:.6f}원 ({response_token_sum / 1000.0 * gpt_response_cost:.6f}$)")
-    return final_results
+    return {
+        "result": final_results,
+        "request_tokens": request_token_sum,
+        "response_tokens": response_token_sum
+    }
