@@ -7,13 +7,21 @@ import random
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from service.GptRequestDTO import GPTRequestDTO
+from dto.GptRequestDTO import GPTRequestDTO
+from dto.CommonDTO import GradeItem, GradeResult
+from typing import List
 
 load_dotenv()  # .env 파일 불러오기
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 gpt_model = os.getenv("GPT_MODEL")
 gpt_problem_model = os.getenv("GPT_PROBLEM_MODEL")
+
+gpt_request_cost = float(os.getenv("GPT_REQUEST_COST"))
+gpt_response_cost = float(os.getenv("GPT_RESPONSE_COST"))
+exchange_rate = float(os.getenv("EXCHANGE_RATE"))
+
 tokenizer = tiktoken.encoding_for_model(gpt_model)
+
 
 def ask_gpt(prompt: str) -> str:
     response = client.chat.completions.create(
@@ -21,7 +29,6 @@ def ask_gpt(prompt: str) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     return response.choices[0].message.content.strip()
-
 
 
 def fix_json_commas(json_string: str) -> str:
@@ -47,7 +54,8 @@ def summary_prompt(content: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def build_followup_prompt(existing_questions: list[str], missing_counts: dict, difficulty: str, question_types: dict, summary: str) -> list[dict]:
+def build_followup_prompt(existing_questions: list[str], missing_counts: dict, difficulty: str, question_types: dict,
+                          summary: str) -> list[dict]:
     system_prompt = GPTRequestDTO.follow_up_system_template.format(
         difficulty=difficulty,
         mc_count=missing_counts["multiple_choice"],
@@ -70,6 +78,7 @@ def build_followup_prompt(existing_questions: list[str], missing_counts: dict, d
         {"role": "user", "content": user_prompt}
     ]
 
+
 def extract_question_texts(parsed_result: dict) -> list[str]:
     question_list = []
     for q_type in ["multiple_choice", "ox", "fill_in_the_blank", "descriptive"]:
@@ -78,12 +87,12 @@ def extract_question_texts(parsed_result: dict) -> list[str]:
                 question_list.append(item.get("question", "").strip())
     return question_list
 
+
 def merge_problems(original: dict, additional: dict) -> dict:
     merged = {}
     for key in ["multiple_choice", "ox", "fill_in_the_blank", "descriptive"]:
         merged[key] = (original.get(key) or []) + (additional.get(key) or [])
     return merged
-
 
 
 def trim_all_question_types(data: dict, question_types: dict) -> dict:
@@ -129,7 +138,6 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
     if mc["num_questions"] + ox["num_questions"] + fib["num_questions"] + desc["num_questions"] > 30:
         return "Total number of questions exceeds 20"
 
-
     request_token_sum = 0
     response_token_sum = 0
 
@@ -140,7 +148,6 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
         request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_user_template.format(user_input=content)))
         content = summary_prompt(content)
         response_token_sum += len(tokenizer.encode(content))
-
 
     system_template = GPTRequestDTO.system_template_kr.format(
         difficulty=difficulty,
@@ -169,10 +176,10 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
         return "Request token length exceeds 10000"
     expected_token_count = GPTRequestDTO.expected_token_count
     expected_tokens = expected_token_count["multiple_choice"] * mc["num_questions"] + \
-                        expected_token_count["ox"] * ox["num_questions"] + \
-                        expected_token_count["fill_in_the_blank"] * fib["num_questions"] + \
-                        expected_token_count["descriptive"] * desc["num_questions"] + \
-                        expected_token_count["base"]
+                      expected_token_count["ox"] * ox["num_questions"] + \
+                      expected_token_count["fill_in_the_blank"] * fib["num_questions"] + \
+                      expected_token_count["descriptive"] * desc["num_questions"] + \
+                      expected_token_count["base"]
     print(f"Expected Token length: {expected_tokens}")
     if expected_tokens > 5000:
         return "Expected token length exceeds 5000"
@@ -224,8 +231,10 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
 
         if any(count > 0 for count in missing_counts.values()):
             question_texts = extract_question_texts(parsed)
-            followup_messages = build_followup_prompt(question_texts, missing_counts, difficulty, question_types, content)
-            request_token_sum += len(tokenizer.encode(followup_messages[0]["content"] + followup_messages[1]["content"]))
+            followup_messages = build_followup_prompt(question_texts, missing_counts, difficulty, question_types,
+                                                      content)
+            request_token_sum += len(
+                tokenizer.encode(followup_messages[0]["content"] + followup_messages[1]["content"]))
             followup_response = client.chat.completions.create(
                 model=gpt_model,
                 messages=followup_messages
@@ -246,3 +255,101 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict | 
     print("Response Token Sum: ", response_token_sum)
     return parsed
 
+
+# 여러 문제를 한 번에 채점할 수 있도록 구성한 프롬프트 템플릿
+
+
+
+def create_grade_prompt(items: List[GradeItem]) -> str:
+    """
+    입력된 GradeItem 리스트를 기반으로 채점 프롬프트 문자열을 생성합니다.
+    각 항목은 문제 ID, 문제, 정답, 학생 답안을 포함합니다.
+    """
+    item_prompts = []
+    for item in items:
+        item_prompt = (
+            f"문제 ID: {item.id}\n"
+            f"문제: {item.question}\n"
+            f"정답: {item.answer}\n"
+            f"학생 답안: {item.input}"
+        )
+        item_prompts.append(item_prompt)
+    all_items_text = "\n\n".join(item_prompts)
+    return GPTRequestDTO.grade_user_template.format(items=all_items_text)
+
+
+def grade_items(items: List[GradeItem]) -> List[GradeResult]:
+    """
+    GPT API를 호출하여 각 GradeItem에 대해 여러 역할로 평가를 수행합니다.
+    각 역할은 답안의 맞고 틀림에 대한 확신 정도(confidence)를 0~100 사이의 정수로 반환합니다.
+    최종 결과는 각 문제에 대해 각 역할의 confidence 평균을 산출하고, 평균이 50 이상이면 맞음(true), 그렇지 않으면 틀림(false)으로 결정합니다.
+    반환되는 결과는 각 문제의 ID와 최종 판정(correct)을 포함하는 GradeResult 리스트입니다.
+    """
+    prompt = create_grade_prompt(items)
+
+    # 평가 역할 목록과 각 역할의 평가 기준 설명
+    roles = [
+        {
+            "name": "전반적 평가자",
+            "description": "전체적인 답안의 완성도, 정확성 및 정답과의 일치 정도를 평가하십시오. 답안이 정답에 부합한다고 판단되면 높은 확신(confidence)을, 그렇지 않으면 낮은 확신을 숫자로 반환하십시오."
+        },
+        {
+            "name": "핵심 키워드 평가자",
+            "description": "정답에 포함되어야 할 핵심 키워드나 유사 표현의 포함 여부를 평가하고, 포함되었다고 판단되면 높은 확신, 그렇지 않으면 낮은 확신을 숫자로 반환하십시오."
+        },
+        {
+            "name": "논리성 평가자",
+            "description": "답안의 논리적 전개, 일관성 및 근거의 명확성을 평가하고, 논리적으로 정답과 부합하면 높은 확신, 아니면 낮은 확신을 숫자로 반환하십시오."
+        }
+    ]
+
+    role_confidences = []  # 각 역할별로 반환된 평가 결과 (JSON 배열)를 저장
+    request_token_sum = 0  # 전체 GPT 호출에서 사용된 토큰 수를 누적
+    response_token_sum = 0 # 전체 GPT 호출에서 반환된 토큰 수를 누적
+    for role in roles:
+        # 역할 정보를 시스템 프롬프트에 포함시키고, 각 역할이 confidence 값을 반환하도록 추가 설명합니다.
+        system_prompt = GPTRequestDTO.grade_system_template.format(name=role["name"], role=role["description"])
+        request_token_sum += len(tokenizer.encode(system_prompt))
+
+        try:
+            response = client.chat.completions.create(
+                model=gpt_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+            ).choices[0].message.content.strip()
+
+            response_token_sum += len(tokenizer.encode(response))
+
+            print(f"[{role['name']}] Response:", response)
+            answer_text = fix_json_commas(response)
+            confidences = json.loads(answer_text)
+            role_confidences.append(confidences)
+        except Exception as e:
+            print(f"[{role['name']}] Error:", e)
+            raise Exception(f"{role['name']} 평가 중 오류 발생: " + str(e))
+
+    # 역할별 결과를 문제 ID 기준으로 집계: {id: [confidence값, ...]}
+    combined_confidences = {}
+    for confidences in role_confidences:
+        for item in confidences:
+            id_val = item.get("id")
+            conf_val = item.get("score")
+            if id_val is None or conf_val is None:
+                raise Exception(f"잘못된 평가 결과 형식: {item}")
+            combined_confidences.setdefault(id_val, []).append(conf_val)
+
+    # 각 문제별 평균 confidence를 산출하고, 평균이 50 이상이면 정답(true)으로 판정
+    final_results = []
+    for id_val, conf_list in combined_confidences.items():
+        avg_conf = sum(conf_list) / len(conf_list)
+        final_decision = avg_conf >= 50  # 임계값 50
+        final_results.append(GradeResult(id=id_val, correct=final_decision))
+
+    print(f"Request Token Sum: {request_token_sum},"
+          f" cost: {request_token_sum / 1000.0 * gpt_request_cost * exchange_rate:.6f}원 ({request_token_sum / 1000.0 * gpt_request_cost:.6f}$)")
+    print(f"Response Token Sum: {response_token_sum},"
+          f" cost: {response_token_sum / 1000.0 * gpt_response_cost * exchange_rate:.6f}원 ({response_token_sum / 1000.0 * gpt_response_cost:.6f}$)")
+
+    return final_results

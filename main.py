@@ -1,9 +1,12 @@
 # app/main.py
 from fastapi import FastAPI
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException
 from starlette.responses import HTMLResponse
 
-from service.gpt_service import ask_gpt, make_problem
+from service.gpt_service import ask_gpt, make_problem, grade_items
+from dto.CommonDTO import GradeItem, GradeResult, GradeRequestDTO
+from typing import List
 
 app = FastAPI()
 
@@ -12,35 +15,36 @@ app = FastAPI()
 class PromptRequest(BaseModel):
     prompt: str
 
+
 class MakeProblemRequest(BaseModel):
     content: str
     difficulty: str
     question_types: dict
 
+
 example_body = {
-    "content": "시험 정리본",        # 사용자가 작성한 정리본
-    "difficulty": "상",             # or "중", "하"
+    "content": "시험 정리본",  # 사용자가 작성한 정리본
+    "difficulty": "상",  # or "중", "하"
     "question_types": {
-        "multiple_choice": {        # 객관식
+        "multiple_choice": {  # 객관식
             "enabled": True,
             "num_questions": 5,
             "num_options": 4
         },
-        "ox": {                    # OX
+        "ox": {  # OX
             "enabled": True,
             "num_questions": 3
         },
-        "fill_in_the_blank": {     # 빈칸 채우기
+        "fill_in_the_blank": {  # 빈칸 채우기
             "enabled": True,
             "num_questions": 3
         },
-        "descriptive": {           # 서술형
+        "descriptive": {  # 서술형
             "enabled": True,
             "num_questions": 2
         }
     }
 }
-
 
 
 @app.post("/ask")
@@ -49,11 +53,23 @@ def ask_endpoint(req: PromptRequest):
     return {"answer": result}
 
 
-
 @app.post("/make-problem")
 def make_problems(req: MakeProblemRequest):
     result = make_problem(req.content, req.difficulty, req.question_types)
     return {"result": result}
+
+
+@app.post("/grade")
+async def grade_endpoint(request_dto: GradeRequestDTO):
+    """
+    여러 문제에 대한 채점을 처리하는 엔드포인트.
+    요청으로부터 items를 받아 GPT API를 통해 채점 후 점수와 문제 ID를 반환.
+    """
+    try:
+        results = grade_items(request_dto.items)
+        return {"result": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # 간단한 웹 페이지를 제공하는 GET 엔드포인트
