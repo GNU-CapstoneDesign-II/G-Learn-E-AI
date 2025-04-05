@@ -1,9 +1,9 @@
 class GPTRequestDTO:
     expected_token_count = {
         "base": 200,
-        "multiple_choice": 150,
+        "multipleChoice": 150,
         "ox": 100,
-        "fill_in_the_blank": 130,
+        "fillInTheBlank": 130,
         "descriptive": 100
     }
 
@@ -93,15 +93,15 @@ User Input Summary
 
 - 문제 난이도: {difficulty}
 - 문제 생성 요청:
-  - 객관식 (enabled: {multiple_choice_enabled}, 문제 수: {multiple_choice_num_questions}, 선지: {multiple_choice_num_options}개)
-  - OX (enabled: {ox_enabled}, 문제 수: {ox_num_questions})
-  - 빈칸 채우기 (enabled: {fib_enabled}, 문제 수: {fib_num_questions})
-  - 서술형 (enabled: {descriptive_enabled}, 문제 수: {descriptive_num_questions})
+  - 객관식 (enabled: {multipleChoiceEnabled}, 문제 수: {multipleChoiceNumQuestions}, 선지: {multipleChoiceNumOptions}개)
+  - OX (enabled: {oxEnabled}, 문제 수: {oxNumQuestions})
+  - 빈칸 채우기 (enabled: {fibEnabled}, 문제 수: {fibNumQuestions})
+  - 서술형 (enabled: {descriptiveEnabled}, 문제 수: {descriptiveNumQuestions})
 
 2. 요구 사항
 1) 각 문제 타입별로, 요청된 개수만큼 문제를 만들어 주세요.
 2) 난이도(상,중,하)에 맞춰 문제 수준을 조절해 주세요.
-3) 객관식은 선지 {multiple_choice_num_options}개를 만들어 주시고, 정답을 반드시 표시해 주세요. 정답은 선지의 인덱스(1부터 시작)로 표기해 주세요.
+3) 객관식은 선지 {multipleChoiceNumOptions}개를 만들어 주시고, 정답을 반드시 표시해 주세요. 정답은 선지의 인덱스(1부터 시작)로 표기해 주세요.
 4) 빈칸 채우기 문제에서 빈칸은 $BLANK$ 로 표기하고, 정답을 명확하게 표기해 주세요.
 5) 빈칸 채우기 문제에서 빈칸 개수는 문장 당 0~2개로 제한하고, 전체 빈칸 개수는 3개 이하로 제한해 주세요.
 6) 각 문제에 대해 answer(정답)와 explanation(해설)을 포함해 주세요. (서술형은 해설을 포함하지 않습니다.)
@@ -110,7 +110,7 @@ User Input Summary
 3. 출력 포맷
 각 문제 유형별로 JSON 배열 형태로 묶어서 아래 예시처럼 출력해주세요. 비활성화인 문제 유형은 빈 리스트로 출력해주세요.
 {{
-    "multiple_choice": [
+    "multipleChoice": [
         {{
             "question": "문제 본문",
             "options": ["선지1", "선지2", "선지3", "선지4"],
@@ -127,7 +127,7 @@ User Input Summary
         }},
         ...
     ],
-    "fill_in_the_blank": [
+    "fillInTheBlank": [
         {{
             "question": "문제 본문(빈칸은 $BLANK$로 표시)",
             "answer": ["정답1", "정답2", ...],
@@ -219,7 +219,7 @@ Output must be in Korean.
 3. 출력 포맷
 각 문제 유형별로 JSON 배열 형태로 묶어서 아래 예시처럼 출력해주세요. 비활성화인 문제 유형은 빈 리스트로 출력해주세요.
 {{
-    "multiple_choice": [
+    "multipleChoice": [
         {{
             "question": "문제 본문",
             "options": ["선지1", "선지2", "선지3", "선지4"],
@@ -236,7 +236,7 @@ Output must be in Korean.
         }},
         ...
     ],
-    "fill_in_the_blank": [
+    "fillInTheBlank": [
         {{
             "question": "문제 본문(빈칸은 $BLANK$로 표시)",
             "answer": ["정답1", "정답2", ...],

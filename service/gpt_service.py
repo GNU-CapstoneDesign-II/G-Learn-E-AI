@@ -8,7 +8,7 @@ import random
 from dotenv import load_dotenv
 from openai import OpenAI
 from dto.GptRequestDTO import GPTRequestDTO
-from dto.CommonDTO import GradeItem, GradeResult, BlankItem, BlankResult
+from dto.CommonDTO import GradeItem, GradeResult, BlankItem, BlankResult, QuestionTypes
 from typing import List, Dict, Any
 
 load_dotenv()  # .env 파일 불러오기
@@ -54,14 +54,14 @@ def summary_prompt(content: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def build_followup_prompt(existing_questions: list[str], missing_counts: dict, difficulty: str, question_types: dict,
+def build_followup_prompt(existing_questions: list[str], missing_counts: dict, difficulty: str, question_types: QuestionTypes,
                           summary: str) -> list[dict]:
     system_prompt = GPTRequestDTO.follow_up_system_template.format(
         difficulty=difficulty,
-        mc_count=missing_counts["multiple_choice"],
-        multiple_choice_num_options=question_types["multiple_choice"]["num_options"],
+        mc_count=missing_counts["multipleChoice"],
+        multiple_choice_num_options=question_types.multipleChoice.numOptions,
         ox_count=missing_counts["ox"],
-        fib_count=missing_counts["fill_in_the_blank"],
+        fib_count=missing_counts["fillInTheBlank"],
         desc_count=missing_counts["descriptive"]
     )
 
@@ -81,7 +81,7 @@ def build_followup_prompt(existing_questions: list[str], missing_counts: dict, d
 
 def extract_question_texts(parsed_result: dict) -> list[str]:
     question_list = []
-    for q_type in ["multiple_choice", "ox", "fill_in_the_blank", "descriptive"]:
+    for q_type in ["multipleChoice", "ox", "fillInTheBlank", "descriptive"]:
         if q_type in parsed_result:
             for item in parsed_result[q_type]:
                 question_list.append(item.get("question", "").strip())
@@ -90,12 +90,12 @@ def extract_question_texts(parsed_result: dict) -> list[str]:
 
 def merge_problems(original: dict, additional: dict) -> dict:
     merged = {}
-    for key in ["multiple_choice", "ox", "fill_in_the_blank", "descriptive"]:
+    for key in ["multipleChoice", "ox", "fillInTheBlank", "descriptive"]:
         merged[key] = (original.get(key) or []) + (additional.get(key) or [])
     return merged
 
 
-def trim_all_question_types(data: dict, question_types: dict) -> dict:
+def trim_all_question_types(data: dict, question_types: QuestionTypes) -> dict:
     """
     문제 유형별로 요청된 개수보다 많은 항목이 있을 경우, 랜덤으로 초과된 문제들을 제거합니다.
     - data: GPT로부터 생성된 문제들 (JSON)
@@ -103,13 +103,23 @@ def trim_all_question_types(data: dict, question_types: dict) -> dict:
     """
     trimmed = {}
 
-    for q_type in ["multiple_choice", "ox", "fill_in_the_blank", "descriptive"]:
+    for q_type in ["multipleChoice", "ox", "fillInTheBlank", "descriptive"]:
         if q_type not in data:
             trimmed[q_type] = []
             continue
 
         questions = data[q_type]
-        requested_count = question_types[q_type]["num_questions"]
+
+        if q_type == "multipleChoice":
+            requested_count = question_types.multipleChoice.numQuestions
+        elif q_type == "ox":
+            requested_count = question_types.ox.numQuestions
+        elif q_type == "fillInTheBlank":
+            requested_count = question_types.fillInTheBlank.numQuestions
+        elif q_type == "descriptive":
+            requested_count = question_types.descriptive.numQuestions
+        else:
+            requested_count = 0
 
         if len(questions) > requested_count:
             trimmed[q_type] = random.sample(questions, requested_count)
@@ -119,23 +129,23 @@ def trim_all_question_types(data: dict, question_types: dict) -> dict:
     return trimmed
 
 
-def make_problem(content: str, difficulty: str, question_types: dict) -> dict:
+def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -> dict:
     # question_types 내부 구조를 미리 변수로 꺼냄
-    mc = question_types["multiple_choice"]
-    ox = question_types["ox"]
-    fib = question_types["fill_in_the_blank"]
-    desc = question_types["descriptive"]
+    mc = question_types.multipleChoice
+    ox = question_types.ox
+    fib = question_types.fillInTheBlank
+    desc = question_types.descriptive
 
-    if not mc["enabled"]:
-        mc["num_questions"] = 0
-    if not ox["enabled"]:
-        ox["num_questions"] = 0
-    if not fib["enabled"]:
-        fib["num_questions"] = 0
-    if not desc["enabled"]:
-        desc["num_questions"] = 0
+    if not mc.enable:
+        mc.numQuestions = 0
+    if not ox.enable:
+        ox.numQuestions = 0
+    if not fib.enable:
+        fib.numQuestions = 0
+    if not desc.enable:
+        desc.numQuestions = 0
 
-    if mc["num_questions"] + ox["num_questions"] + fib["num_questions"] + desc["num_questions"] > 30:
+    if mc.numQuestions + ox.numQuestions + fib.numQuestions + desc.numQuestions > 30:
         return "Total number of questions exceeds 20"
 
     request_token_sum = 0
@@ -150,15 +160,15 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict:
 
     system_template = GPTRequestDTO.system_template_kr.format(
         difficulty=difficulty,
-        multiple_choice_enabled=mc["enabled"],
-        multiple_choice_num_questions=mc["num_questions"],
-        multiple_choice_num_options=mc["num_options"],
-        ox_enabled=ox["enabled"],
-        ox_num_questions=ox["num_questions"],
-        fib_enabled=fib["enabled"],
-        fib_num_questions=fib["num_questions"],
-        descriptive_enabled=desc["enabled"],
-        descriptive_num_questions=desc["num_questions"]
+        multipleChoiceEnabled=mc.enable,
+        multipleChoiceNumQuestions=mc.numQuestions,
+        multipleChoiceNumOptions=mc.numOptions,
+        oxEnabled=ox.enable,
+        oxNumQuestions=ox.numQuestions,
+        fibEnabled=fib.enable,
+        fibNumQuestions=fib.numQuestions,
+        descriptiveEnabled=desc.enable,
+        descriptiveNumQuestions=desc.numQuestions
     )
     # 템플릿에 값 대입
     prompt = GPTRequestDTO.content_template_kr.format(
@@ -174,10 +184,10 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict:
     if len(tokenizer.encode(prompt + system_template)) > 10000:
         return "Request token length exceeds 10000"
     expected_token_count = GPTRequestDTO.expected_token_count
-    expected_tokens = expected_token_count["multiple_choice"] * mc["num_questions"] + \
-                      expected_token_count["ox"] * ox["num_questions"] + \
-                      expected_token_count["fill_in_the_blank"] * fib["num_questions"] + \
-                      expected_token_count["descriptive"] * desc["num_questions"] + \
+    expected_tokens = expected_token_count["multipleChoice"] * mc.numQuestions + \
+                      expected_token_count["ox"] * ox.numQuestions + \
+                      expected_token_count["fillInTheBlank"] * fib.numQuestions + \
+                      expected_token_count["descriptive"] * desc.numQuestions + \
                       expected_token_count["base"]
     # print(f"Expected Token length: {expected_tokens}")
 
@@ -220,10 +230,10 @@ def make_problem(content: str, difficulty: str, question_types: dict) -> dict:
         regenerate_limit -= 1
 
         missing_counts = {
-            "multiple_choice": max(0, mc["num_questions"] - len(parsed.get("multiple_choice", []))),
-            "ox": max(0, ox["num_questions"] - len(parsed.get("ox", []))),
-            "fill_in_the_blank": max(0, fib["num_questions"] - len(parsed.get("fill_in_the_blank", []))),
-            "descriptive": max(0, desc["num_questions"] - len(parsed.get("descriptive", [])))
+            "multipleChoice": max(0, mc.numQuestions - len(parsed.get("multipleChoice", []))),
+            "ox": max(0, ox.numQuestions - len(parsed.get("ox", []))),
+            "fillInTheBlank": max(0, fib.numQuestions - len(parsed.get("fillInTheBlank", []))),
+            "descriptive": max(0, desc.numQuestions - len(parsed.get("descriptive", [])))
         }
 
         if any(count > 0 for count in missing_counts.values()):

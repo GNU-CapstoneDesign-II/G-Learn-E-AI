@@ -8,10 +8,38 @@ class PromptRequest(BaseModel):
     prompt: str
 
 
+class MultipleChoiceItem(BaseModel):
+    enable: bool  # 객관식 문제 사용 여부
+    numQuestions: int  # 문제 개수
+    numOptions: int  # 선택지 개수
+
+
+class OxItem(BaseModel):
+    enable: bool  # OX 문제 사용 여부
+    numQuestions: int  # 문제 개수
+
+
+class FillInTheBlankItem(BaseModel):
+    enable: bool  # 빈칸 채우기 문제 사용 여부
+    numQuestions: int  # 문제 개수
+
+
+class DescriptiveItem(BaseModel):
+    enable: bool  # 서술형 문제 사용 여부
+    numQuestions: int  # 문제 개수
+
+
+class QuestionTypes(BaseModel):
+    multipleChoice: MultipleChoiceItem  # 객관식 문제 설정
+    ox: OxItem  # OX 문제 설정
+    fillInTheBlank: FillInTheBlankItem  # 빈칸 채우기 문제 설정
+    descriptive: DescriptiveItem  # 서술형 문제 설정
+
+
 class MakeProblemRequest(BaseModel):
     content: str
     difficulty: str
-    question_types: dict
+    questionTypes: QuestionTypes
 
 
 class GradeItem(BaseModel):

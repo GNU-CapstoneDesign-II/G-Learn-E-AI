@@ -5,8 +5,8 @@ from starlette.responses import HTMLResponse
 
 from repository.database import engine
 from repository.models import Base
-from controller.database_controller import router as db_router
-from controller.problem_maker_controller import router as maker_router
+from controller.DatabaseController import router as db_router
+from controller.ProblemMakerController import router as maker_router
 
 load_dotenv()
 app = FastAPI()

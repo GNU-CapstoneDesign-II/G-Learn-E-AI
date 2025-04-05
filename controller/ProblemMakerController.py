@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
-from controller.database_controller import get_db
+from controller.DatabaseController import get_db
 from dto.CommonDTO import BlankRequestDTO, PromptRequest, MakeProblemRequest, GradeRequestDTO
 from repository.repository import log_and_save_tokens
 from service.gpt_service import grade_blank_items, ask_gpt, make_problem, grade_items
@@ -19,7 +19,9 @@ def ask_endpoint(req: PromptRequest):
 @router.post("/make-problem")
 def make_problems(req: MakeProblemRequest, db: Session = Depends(get_db), request: Request = None):
     try:
-        result = make_problem(req.content, req.difficulty, req.question_types)
+        print("req:", req)
+        result = make_problem(req.content, req.difficulty, req.questionTypes)
+        print(result)
 
         # 리포지토리 함수 한 번으로 로깅 + 토큰 저장 + 매핑 처리
         log, usage = log_and_save_tokens(
@@ -33,6 +35,7 @@ def make_problems(req: MakeProblemRequest, db: Session = Depends(get_db), reques
 
         return {"result": result["result"]}
     except Exception as e:
+        print(req)
         raise HTTPException(status_code=500, detail=str(e))
 
 
