@@ -122,12 +122,10 @@ def get_logs_data(db: Session, dt: datetime, period: str) -> Tuple[str, str, Lis
             cost_won = cost_usd * exchange_rate
 
         token_usage_dto = TokenUsageDTO(
-            id=usage.id if usage else None,
             requestTokens=usage.request_tokens if usage else 0,
             responseTokens=usage.response_tokens if usage else 0,
             costUsd=cost_usd,
             costWon=cost_won,
-            timestamp=usage.timestamp if usage else None
         ) if usage else None
 
         results.append(

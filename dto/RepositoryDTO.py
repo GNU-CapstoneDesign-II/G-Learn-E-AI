@@ -4,12 +4,10 @@ from datetime import datetime
 
 
 class TokenUsageDTO(BaseModel):
-    id: Optional[int]
     requestTokens: int
     responseTokens: int
     costUsd: float
     costWon: float
-    timestamp: Optional[datetime]
 
 
 class LogItemDTO(BaseModel):
