@@ -19,9 +19,7 @@ def ask_endpoint(req: PromptRequest):
 @router.post("/make-problem")
 def make_problems(req: MakeProblemRequest, db: Session = Depends(get_db), request: Request = None):
     try:
-        print("req:", req)
         result = make_problem(req.content, req.difficulty, req.questionTypes)
-        print(result)
 
         # 리포지토리 함수 한 번으로 로깅 + 토큰 저장 + 매핑 처리
         log, usage = log_and_save_tokens(

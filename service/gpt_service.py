@@ -36,6 +36,25 @@ def fix_json_commas(json_string: str) -> str:
     return re.sub(r',\s*([\]}])', r'\1', json_string)
 
 
+def remove_json_block(json_string: str) -> str:
+    # ```json ... ``` 형태의 코드 블록을 제거합니다.
+    return re.sub(r"```json\s*(.*?)\s*```", r"\1", json_string, flags=re.DOTALL)
+
+
+def replace_underscores(text):
+    """
+    문자열 내에서 연속된 밑줄(_)을 [[BLANK]]로 치환합니다.
+
+    Args:
+        text (str): 원본 문자열
+
+    Returns:
+        str: 변환된 문자열
+    """
+    # 한 개 이상의 밑줄을 찾아서 [[BLANK]]로 대체
+    return re.sub(r'_+', '[[BLANK]]', text)
+
+
 def summary_prompt(content: str) -> str:
     print(GPTRequestDTO.summary_user_template.format(user_input=content))
     response = client.chat.completions.create(
@@ -54,7 +73,8 @@ def summary_prompt(content: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def build_followup_prompt(existing_questions: list[str], missing_counts: dict, difficulty: str, question_types: QuestionTypes,
+def build_followup_prompt(existing_questions: list[str], missing_counts: dict, difficulty: str,
+                          question_types: QuestionTypes,
                           summary: str) -> list[dict]:
     system_prompt = GPTRequestDTO.follow_up_system_template.format(
         difficulty=difficulty,
@@ -151,8 +171,8 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
     request_token_sum = 0
     response_token_sum = 0
 
-    if len(tokenizer.encode(content)) > 5000:
-        # 요청 토큰 길이가 5000을 초과하면 내용을 요약합니다.
+    if len(tokenizer.encode(content)) > 8000:
+        # 요청 토큰 길이가 8000을 초과하면 내용을 요약합니다.
         request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_system_template))
         request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_user_template.format(user_input=content)))
         content = summary_prompt(content)
@@ -175,21 +195,13 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
         summary=content
     )
 
-    print(f"system_template: {system_template}")
-    print(f"prompt: {prompt}")
-
     # print(f"Request Token length: {len(tokenizer.encode(prompt + system_template))}")
     request_token_sum += len(tokenizer.encode(prompt + system_template))
 
     if len(tokenizer.encode(prompt + system_template)) > 10000:
-        return "Request token length exceeds 10000"
-    expected_token_count = GPTRequestDTO.expected_token_count
-    expected_tokens = expected_token_count["multipleChoice"] * mc.numQuestions + \
-                      expected_token_count["ox"] * ox.numQuestions + \
-                      expected_token_count["fillInTheBlank"] * fib.numQuestions + \
-                      expected_token_count["descriptive"] * desc.numQuestions + \
-                      expected_token_count["base"]
-    # print(f"Expected Token length: {expected_tokens}")
+        return {"result": "Request token length exceeds 10000",
+                "request_tokens": request_token_sum,
+                "response_tokens": response_token_sum}
 
     response = client.chat.completions.create(
         model=gpt_model,
@@ -206,23 +218,20 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
         # max_tokens=expected_tokens
     ).choices[0].message.content.strip()
 
+    # 응답 토큰 길이 추가
     response_token_sum += len(tokenizer.encode(response))
 
-    response = fix_json_commas(response)
-    # print(f"Response: {response}")
-
-    # 정규표현식을 사용해 ```json ... ``` 형태의 코드 블록을 제거합니다.
-    match = re.search(r"```json\s*(\{.*\})\s*```", response, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        json_str = response
+    # JSON 블록을 제거합니다.
+    json_str = fix_json_commas(remove_json_block(response))
+    # print(f"Response: {json_str}")
 
     try:
         parsed = json.loads(json_str)
     except json.JSONDecodeError as e:
         # JSON 파싱 실패 시, 오류 메시지를 반환합니다.
-        return "Json parsing error: " + str(e)
+        return {"result": "Json parsing error: " + str(e),
+                "request_tokens": request_token_sum,
+                "response_tokens": response_token_sum}
 
     parsed = trim_all_question_types(parsed, question_types)
     regenerate_limit = 3
@@ -235,7 +244,7 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
             "fillInTheBlank": max(0, fib.numQuestions - len(parsed.get("fillInTheBlank", []))),
             "descriptive": max(0, desc.numQuestions - len(parsed.get("descriptive", [])))
         }
-
+        print(f"Missing_counts: {missing_counts}")
         if any(count > 0 for count in missing_counts.values()):
             question_texts = extract_question_texts(parsed)
             followup_messages = build_followup_prompt(question_texts, missing_counts, difficulty, question_types,
@@ -246,28 +255,32 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
                 model=gpt_model,
                 messages=followup_messages
             ).choices[0].message.content.strip()
-
-            followup_response = fix_json_commas(followup_response)
+            # 응답 토큰 길이 추가
             response_token_sum += len(tokenizer.encode(followup_response))
-            match = re.search(r"```json\s*(\{.*\})\s*```", followup_response, re.DOTALL)
-            json_followup = match.group(1) if match else followup_response
+
+            json_followup = fix_json_commas(remove_json_block(followup_response))
+
             print(f"json_followup: {json_followup}")
             try:
                 parsed_followup = json.loads(json_followup)
                 parsed = merge_problems(parsed, parsed_followup)
             except json.JSONDecodeError as e:
-                return "Follow-up Json parsing error: " + str(e)
+                return {"result": "Follow-up Json parsing error: " + str(e),
+                        "request_tokens": request_token_sum,
+                        "response_tokens": response_token_sum}
             parsed = trim_all_question_types(parsed, question_types)
-    # print(f"Request Token Sum: {request_token_sum},"
-    #       f" cost: {request_token_sum / 1000.0 * gpt_request_cost * exchange_rate:.6f}원 ({request_token_sum / 1000.0 * gpt_request_cost:.6f}$)")
-    # print(f"Response Token Sum: {response_token_sum},"
-    #       f" cost: {response_token_sum / 1000.0 * gpt_response_cost * exchange_rate:.6f}원 ({response_token_sum / 1000.0 * gpt_response_cost:.6f}$)")
+        else:
+            break
+
+    if "fillInTheBlank" in parsed:
+        for item in parsed["fillInTheBlank"]:
+            item["question"] = replace_underscores(item["question"])
+
     return {
         "result": parsed,
         "request_tokens": request_token_sum,
         "response_tokens": response_token_sum,
     }
-
 
 
 def gpt_role_eval(
@@ -335,8 +348,6 @@ def run_role_evaluations(
             print(f"[{role['name']}] Error:", e)
             raise Exception(f"{role['name']} 평가 중 오류 발생: " + str(e))
     return role_confidences, request_token_sum, response_token_sum
-
-
 
 
 def create_grade_prompt(items: List[GradeItem]) -> str:
