@@ -3,7 +3,7 @@ FROM python:3.9-slim
 WORKDIR /usr/src/app
 
 # netcat 등 대기 스크립트 의존 패키지 설치
-RUN apt-get update && apt-get install -y netcat
+RUN apt-get update && apt-get install -y netcat-openbsd
 
 # wait-for-it.sh 복사 및 실행권한 부여
 COPY wait-for-it.sh /usr/src/app/wait-for-it.sh
