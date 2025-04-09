@@ -1,0 +1,25 @@
+FROM python:3.9-slim
+
+WORKDIR /usr/src/app
+
+# netcat 등 대기 스크립트 의존 패키지 설치
+RUN apt-get update && apt-get install -y netcat
+
+# wait-for-it.sh 복사 및 실행권한 부여
+COPY wait-for-it.sh /usr/src/app/wait-for-it.sh
+RUN chmod +x /usr/src/app/wait-for-it.sh
+
+# 의존성 목록 복사
+COPY requirements.txt .
+
+# 의존성 설치
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 나머지 소스 복사
+COPY . .
+
+# 내부 포트
+EXPOSE 8000
+
+# 실행 커맨드 (main.py 내부에 app = FastAPI() 객체가 있다고 가정)
+CMD ["/usr/src/app/wait-for-it.sh", "mysql_db:3306", "--", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
