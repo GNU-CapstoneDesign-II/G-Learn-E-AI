@@ -1,0 +1,2 @@
+# wait-for-it.sh는 LF 유지, 다른 파일은 기본 설정 유지
+wait-for-it.sh text eol=lf
