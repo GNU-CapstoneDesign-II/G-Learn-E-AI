@@ -65,3 +65,56 @@ def pdf_text_processing(text: str) -> dict:
         "request_tokens": request_token_sum,
         "response_tokens": response_token_sum,
     }
+
+
+
+
+# 시스템 프롬프트: 음성 전사 결과를 정제하고 요약하는 역할 명시
+audio_text_processing_system_template = """
+당신은 전문 음성 전사 텍스트 정제 및 요약 어시스턴트입니다.
+음성 파일의 자동 전사 결과는 오타, 문장 단절, 부정확한 표현 등을 포함할 수 있습니다.
+사용자가 제공한 전사 결과를 바탕으로, 원래 발화의 의미를 최대한 추론하여 자연스럽고 명확한 문장으로 재구성하고,
+핵심 내용을 구조적으로 정리해서 반환해주세요.
+"""
+
+# 사용자 프롬프트: 원시 전사 텍스트 제공
+audio_text_processing_user_template = """
+아래는 Whisper API로 전사된 원시 텍스트입니다.
+전사 과정에서 일부 오타나 끊김이 있을 수 있으니, 원래 의미를 추론하여 자연스럽게 연결하고,
+중요 내용을 간결히 요약해 주세요.
+
+원시 전사 텍스트:
+{text}
+"""
+
+def audio_text_processing(text: str) -> dict:
+    """
+    Whisper API 전사 텍스트를 정제하고 요약하여 반환합니다.
+
+    :param text: Whisper로부터 받은 원시 전사 문자열
+    :return: {
+        "result": 정제 및 요약된 텍스트,
+        "request_tokens": 요청에 사용된 토큰 수,
+        "response_tokens": 응답에 사용된 토큰 수
+    }
+    """
+    # 토큰 사용량 계산
+    request_tokens = len(tokenizer.encode(text))
+
+    # GPT 호출
+    response = client.chat.completions.create(
+        model=gpt_model,
+        messages=[
+            {"role": "system", "content": audio_text_processing_system_template},
+            {"role": "user", "content": audio_text_processing_user_template.format(text=text)}
+        ]
+    )
+    # 응답 텍스트 추출 및 토큰 계산
+    result_text = response.choices[0].message.content.strip()
+    response_tokens = len(tokenizer.encode(result_text))
+
+    return {
+        "result": result_text,
+        "request_tokens": request_tokens,
+        "response_tokens": response_tokens,
+    }
