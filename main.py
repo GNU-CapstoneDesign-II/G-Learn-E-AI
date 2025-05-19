@@ -8,6 +8,7 @@ from repository.models import Base
 from controller.DatabaseController import router as db_router
 from controller.ProblemMakerController import router as maker_router
 from controller.ConverterController import router as converter_router
+from controller.KeywordExtractController import router as keyword_router
 
 load_dotenv()
 app = FastAPI()
@@ -18,6 +19,7 @@ Base.metadata.create_all(bind=engine)
 app.include_router(db_router)
 app.include_router(maker_router)
 app.include_router(converter_router)
+app.include_router(keyword_router)
 
 example_body = {
     "content": "시험 정리본",  # 사용자가 작성한 정리본
