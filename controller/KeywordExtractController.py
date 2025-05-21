@@ -20,7 +20,7 @@ class ProblemIn(BaseModel):
     title: str
     # ⬇️ 3.9에서는 Optional[List[Optional[Dict[str, Any]]]] 로 표기
     options: Optional[List[Optional[Dict[str, Any]]]] = None
-    answers: Optional[List[str]] = None
+    answers: Optional[List[Optional[str]]] = None
     explanation: Optional[str] = None
     type: str = Field(..., pattern="MULTIPLE|BLANK|OX|DESCRIPTIVE")
 
