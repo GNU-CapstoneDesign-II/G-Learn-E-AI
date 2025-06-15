@@ -16,7 +16,8 @@ gpt_request_cost    = float(os.getenv("GPT_REQUEST_COST", 0))
 gpt_response_cost   = float(os.getenv("GPT_RESPONSE_COST", 0))
 exchange_rate       = float(os.getenv("EXCHANGE_RATE", 1300))
 
-tokenizer           = tiktoken.encoding_for_model(gpt_problem_model)
+# tokenizer           = tiktoken.encoding_for_model(gpt_problem_model)
+tokenizer          = tiktoken.get_encoding("gpt-4o-mini")  # 임시
 
 # ─────────────────────────────────────────────────────────────
 # Prompt 템플릿

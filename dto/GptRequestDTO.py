@@ -30,8 +30,8 @@ class GPTRequestDTO:
 2) multipleChoice은 선지 {multipleChoiceNumOptions}개를 만들어 주시고, 정답을 반드시 표시해 주세요. 정답은 선지의 인덱스(1부터 시작)로 표기해 주세요.
 3) 각 선지의 맨 앞에 어떠한 기호(선지 번호나 기호 등)도 붙이지 마세요. 
 4) fillInTheBlank 문제에서 빈칸은 반드시 __ 같은 밑줄 로 표기하고 절대 다른 방법으로 빈칸을 표현해서는 안됩니다.
-5) illInTheBlank 유형에서 question은 여러 문장으로 구성될 수 있으며, 각 문장마다 빈칸을 포함할 수 있습니다.
-6) fillInTheBlank 유형에서 빈칸의 개수와 answer의 개수는 반드시 일치해야 합니다.
+5) fillInTheBlank 유형에서 question은 여러 문장으로 구성될 수 있으며, 각 문장마다 빈칸을 포함할 수 있습니다.
+6) fillInTheBlank 유형에서 빈칸의 개수와 answer의 개수는 반드시 일치해야 합니다. 빈칸의 개수는 최대 4개 이하로 제한합니다.
 7) fillInTheBlank 유형에서 빈칸을 모호하지 않게 유추할 수 있어야 하며, 빈칸간에 순서를 유추할 수 있어야 합니다.
 8) descriptive을 제외한 각 문제에 대해 answer와 explanation을 포함해 주세요.
 9) 문제들은 사용자가 입력한 정리본의 내용을 통해 해결할 수 있어야 합니다.
@@ -58,7 +58,7 @@ class GPTRequestDTO:
     ],
     "fillInTheBlank": [
         {{
-            "question": "문제 본문(빈칸은 $BLANK$로 표시)",
+            "question": "문제 본문(빈칸은 __로 표시)",
             "answer": ["정답1", "정답2", ...],
             "explanation": "정답 해설"
         }},
@@ -144,7 +144,7 @@ Output must be in Korean.
 4) 각 선지의 맨 앞에 어떠한 기호(선지 번호나 기호 등)도 붙이지 마세요. 
 5) fillInTheBlank 문제에서 빈칸은 반드시 __ 같은 밑줄 로 표기하고 절대 다른 방법으로 빈칸을 표현해서는 안됩니다.
 6) fillInTheBlank 유형에서 question은 여러 문장으로 구성될 수 있으며, 각 문장마다 빈칸을 포함할 수 있습니다.
-7) fillInTheBlank 유형에서 빈칸의 개수와 answer의 개수는 반드시 일치해야 합니다.
+7) fillInTheBlank 유형에서 빈칸의 개수와 answer의 개수는 반드시 일치해야 합니다. 빈칸의 개수는 최대 4개 이하로 제한합니다.
 8) fillInTheBlank 유형에서 빈칸을 모호하지 않게 유추할 수 있어야 하며, 빈칸간에 순서를 유추할 수 있어야 합니다.
 9) descriptive을 제외한 각 문제에 대해 answer와 explanation을 포함해 주세요.
 10) 문제들은 사용자가 입력한 정리본의 내용을 통해 해결할 수 있어야 합니다.
@@ -172,7 +172,7 @@ Output must be in Korean.
     ],
     "fillInTheBlank": [
         {{
-            "question": "문제 본문(빈칸은 $BLANK$로 표시)",
+            "question": "문제 본문(빈칸은 __로 표시)",
             "answer": ["정답1", "정답2", ...],
             "explanation": "정답 해설"
         }},

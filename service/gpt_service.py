@@ -20,8 +20,8 @@ gpt_request_cost = float(os.getenv("GPT_REQUEST_COST"))
 gpt_response_cost = float(os.getenv("GPT_RESPONSE_COST"))
 exchange_rate = float(os.getenv("EXCHANGE_RATE"))
 
-tokenizer = tiktoken.encoding_for_model(gpt_model)
-
+# tokenizer = tiktoken.encoding_for_model(gpt_model)
+tokenizer = tiktoken.encoding_for_model("gpt-4o-mini") # 임시
 
 def ask_gpt(prompt: str) -> str:
     response = client.chat.completions.create(
@@ -171,6 +171,9 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
     request_token_sum = 0
     response_token_sum = 0
 
+    if gpt_model == "gpt-4.1-mini":
+        tokenizer = tiktoken.encoding_for_model("gpt-4o-mini") # gpt-4.1-mini 모델은 gpt-4o-mini 토크나이저를 사용합니다.
+
     if len(tokenizer.encode(content)) > 8000:
         # 요청 토큰 길이가 8000을 초과하면 내용을 요약합니다.
         request_token_sum += len(tokenizer.encode(GPTRequestDTO.summary_system_template))
@@ -275,6 +278,12 @@ def make_problem(content: str, difficulty: str, question_types: QuestionTypes) -
     if "fillInTheBlank" in parsed:
         for item in parsed["fillInTheBlank"]:
             item["question"] = replace_underscores(item["question"])
+
+    if gpt_model == "gpt-4.1-mini":
+        # 토큰 비용 보정
+
+        # 토크나이저 복구
+        tokenizer = tiktoken.encoding_for_model(gpt_model)
 
     return {
         "result": parsed,

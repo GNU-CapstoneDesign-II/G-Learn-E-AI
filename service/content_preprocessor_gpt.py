@@ -14,7 +14,8 @@ gpt_request_cost = float(os.getenv("GPT_REQUEST_COST"))
 gpt_response_cost = float(os.getenv("GPT_RESPONSE_COST"))
 exchange_rate = float(os.getenv("EXCHANGE_RATE"))
 
-tokenizer = tiktoken.encoding_for_model(gpt_model)
+# tokenizer = tiktoken.encoding_for_model(gpt_model)
+tokenizer = tiktoken.get_encoding("gpt-4o-mini")
 
 pdf_text_processing_system_template = """
 당신은 전문 텍스트 정제 및 편집 어시스턴트입니다.
