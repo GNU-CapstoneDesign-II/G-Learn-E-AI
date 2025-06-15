@@ -7,6 +7,8 @@ import tiktoken
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from utils.GetTictoken import get_tokenizer_for_model
+
 load_dotenv()
 
 client              = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -16,7 +18,7 @@ gpt_request_cost    = float(os.getenv("GPT_REQUEST_COST", 0))
 gpt_response_cost   = float(os.getenv("GPT_RESPONSE_COST", 0))
 exchange_rate       = float(os.getenv("EXCHANGE_RATE", 1300))
 
-tokenizer           = tiktoken.encoding_for_model(gpt_problem_model)
+tokenizer = get_tokenizer_for_model(gpt_problem_model)
 
 # ─────────────────────────────────────────────────────────────
 # Prompt 템플릿

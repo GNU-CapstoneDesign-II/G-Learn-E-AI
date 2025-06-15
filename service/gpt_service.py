@@ -11,6 +11,8 @@ from dto.GptRequestDTO import GPTRequestDTO
 from dto.CommonDTO import GradeItem, GradeResult, BlankItem, BlankResult, QuestionTypes
 from typing import List, Dict, Any
 
+from utils.GetTictoken import get_tokenizer_for_model
+
 load_dotenv()  # .env 파일 불러오기
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 gpt_model = os.getenv("GPT_MODEL", "gpt-4o-mini")
@@ -20,7 +22,7 @@ gpt_request_cost = float(os.getenv("GPT_REQUEST_COST"))
 gpt_response_cost = float(os.getenv("GPT_RESPONSE_COST"))
 exchange_rate = float(os.getenv("EXCHANGE_RATE"))
 
-tokenizer = tiktoken.encoding_for_model(gpt_model)
+tokenizer = get_tokenizer_for_model(gpt_model)
 
 def ask_gpt(prompt: str) -> str:
     response = client.chat.completions.create(
