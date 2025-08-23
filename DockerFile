@@ -40,25 +40,23 @@ RUN python -m pip install --upgrade pip \
 # ===== runtime stage =====
 FROM python:3.11-slim
 WORKDIR /usr/src/app
-
-# 필수 도구(대기/미디어/타임존)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      netcat-openbsd ffmpeg tzdata \
-  && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Seoul
 
-# 의존성 설치 (휠 사용)
+# 런타임 필요한 도구 (ffmpeg만 예시. netcat 불필요)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tzdata \
+  && rm -rf /var/lib/apt/lists/*
+
+# 의존성 설치
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
-# wait-for-it + 앱 소스
-COPY wait-for-it.sh /usr/src/app/wait-for-it.sh
-RUN chmod +x /usr/src/app/wait-for-it.sh
+# 앱 소스
 COPY . .
 
-# 네트워크/DB 기본값
-ENV DB_HOST=host.docker.internal
+# 로그 디렉터리 보장(컨테이너 내부)
+RUN mkdir -p /usr/src/app/logs
+
 EXPOSE 8000
 
-# 환경변수 확장을 위해 sh -c 사용 (!!! 중요)
-CMD ["sh","-c","/usr/src/app/wait-for-it.sh ${DB_HOST}:3306 -- uvicorn main:app --host 0.0.0.0 --port 8000"]
+# 👉 wait-for-it 제거. 표준 uvicorn 실행
+CMD ["uvicorn","main:app","--host","0.0.0.0","--port","8000"]
