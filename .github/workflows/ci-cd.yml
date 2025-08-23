@@ -16,7 +16,7 @@ jobs:
     needs: build-push
     uses: <ORG>/.github/.github/workflows/deploy-stack.yml@main
     with:
-      image_app_ai: ${{ secrets.DOCKERHUB_USERNAME }}/g-learn-e-ai
-      image_app_be: ${{ secrets.DOCKERHUB_USERNAME }}/g-learn-e-be
+      image_app_ai: ${{ vars.DOCKERHUB_USERNAME }}/g-learn-e-ai
+      image_app_be: ${{ vars.DOCKERHUB_USERNAME }}/g-learn-e-be
       stack_dir: $HOME/stack
     secrets: inherit
