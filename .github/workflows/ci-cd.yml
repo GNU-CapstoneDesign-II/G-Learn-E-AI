@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-push:
-    uses: <ORG>/.github/.github/workflows/build-push.yml@main
+    uses: GNU-CapstoneDesign-II/.github/.github/workflows/build-push.yml@main
     with:
       image_name: ${{ vars.DOCKERHUB_USERNAME }}/g-learn-e-ai
       context: .
@@ -14,7 +14,7 @@ jobs:
 
   deploy:
     needs: build-push
-    uses: <ORG>/.github/.github/workflows/deploy-stack.yml@main
+    uses: GNU-CapstoneDesign-II/.github/.github/workflows/deploy-stack.yml@main
     with:
       image_app_ai: ${{ vars.DOCKERHUB_USERNAME }}/g-learn-e-ai
       image_app_be: ${{ vars.DOCKERHUB_USERNAME }}/g-learn-e-be
