@@ -7,7 +7,7 @@ jobs:
   build-push:
     uses: <ORG>/.github/.github/workflows/build-push.yml@main
     with:
-      image_name: ${{ var.DOCKERHUB_USERNAME }}/g-learn-e-ai
+      image_name: ${{ vars.DOCKERHUB_USERNAME }}/g-learn-e-ai
       context: .
       dockerfile: ./DockerFile
     secrets: inherit
